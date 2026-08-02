@@ -257,7 +257,7 @@
 <div class="app">
   <div class="topbar">
     <h1>Générateur de reçu</h1>
-    <span>Camp STEM &amp; Robotique 2026 — RobotsMali</span>
+    <span>Camp STEM &amp; Robotique 2026 — Robots Mali</span>
   </div>
 
   <!-- FORM -->
@@ -267,7 +267,7 @@
     <div class="row2">
       <div class="field">
         <label for="numero">N° Reçu</label>
-        <input type="text" id="numero" placeholder="ex : 0000">
+        <input type="text" id="numero" placeholder="ex : 0042">
       </div>
       <div class="field">
         <label for="date">Date</label>
@@ -342,6 +342,16 @@
       </div>
       <button class="btn dark" id="saveSheetBtn">Enregistrer dans Google Sheets</button>
       <div class="hint" id="sheetHint">Ajoute ce reçu comme nouvelle ligne dans ta feuille Google Sheets (donc dans ton Drive). Colle l'URL une fois — elle reste dans ce champ pour la session en cours.</div>
+    </div>
+
+    <div class="panel-section">
+      <h2>Envoi par WhatsApp</h2>
+      <div class="field">
+        <label for="waPhone">Numéro WhatsApp du destinataire (avec indicatif pays)</label>
+        <input type="text" id="waPhone" placeholder="ex : +223 70 00 00 00">
+      </div>
+      <button class="btn dark" id="waBtn">Envoyer par WhatsApp</button>
+      <div class="hint" id="waHint">Sur mobile : le PDF est joint directement dans WhatsApp. Sur ordinateur : le PDF se télécharge et WhatsApp Web s'ouvre — il suffit de joindre le fichier téléchargé.</div>
     </div>
   </div>
 
@@ -485,6 +495,57 @@
       .replace(/^_+|_+$/g,'') || 'recu';
   }
 
+  async function buildPdf() {
+    const paper = document.getElementById('paper');
+    const canvas = await html2canvas(paper, {
+      scale: 3,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+    });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const usableW = pageW - margin * 2;
+    const imgH = (canvas.height * usableW) / canvas.width;
+
+    const imgData = canvas.toDataURL('image/png');
+
+    if (imgH <= pageH - margin * 2) {
+      pdf.addImage(imgData, 'PNG', margin, margin, usableW, imgH);
+    } else {
+      // Slice the tall image across multiple pages
+      const pxPerMm = canvas.width / usableW;
+      const pageHeightPx = (pageH - margin * 2) * pxPerMm;
+      let renderedPx = 0;
+      let first = true;
+      while (renderedPx < canvas.height) {
+        const sliceH = Math.min(pageHeightPx, canvas.height - renderedPx);
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceH;
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const sliceData = sliceCanvas.toDataURL('image/png');
+        const sliceHmm = (sliceH * usableW) / canvas.width;
+        if (!first) pdf.addPage();
+        pdf.addImage(sliceData, 'PNG', margin, margin, usableW, sliceHmm);
+        renderedPx += sliceH;
+        first = false;
+      }
+    }
+    return pdf;
+  }
+
+  function pdfFilename() {
+    const numero = sanitize(els.numero.value);
+    const nom = sanitize(els.nom.value);
+    return `Recu_${nom}_${numero}.pdf`;
+  }
+
   document.getElementById('downloadBtn').addEventListener('click', async () => {
     const btn = document.getElementById('downloadBtn');
     const hint = document.getElementById('downloadHint');
@@ -493,51 +554,8 @@
     btn.textContent = 'Génération du PDF…';
 
     try {
-      const paper = document.getElementById('paper');
-      const canvas = await html2canvas(paper, {
-        scale: 3,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-      });
-
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const usableW = pageW - margin * 2;
-      const imgH = (canvas.height * usableW) / canvas.width;
-
-      const imgData = canvas.toDataURL('image/png');
-
-      if (imgH <= pageH - margin * 2) {
-        pdf.addImage(imgData, 'PNG', margin, margin, usableW, imgH);
-      } else {
-        // Slice the tall image across multiple pages
-        const pxPerMm = canvas.width / usableW;
-        const pageHeightPx = (pageH - margin * 2) * pxPerMm;
-        let renderedPx = 0;
-        let first = true;
-        while (renderedPx < canvas.height) {
-          const sliceH = Math.min(pageHeightPx, canvas.height - renderedPx);
-          const sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = canvas.width;
-          sliceCanvas.height = sliceH;
-          const ctx = sliceCanvas.getContext('2d');
-          ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-          const sliceData = sliceCanvas.toDataURL('image/png');
-          const sliceHmm = (sliceH * usableW) / canvas.width;
-          if (!first) pdf.addPage();
-          pdf.addImage(sliceData, 'PNG', margin, margin, usableW, sliceHmm);
-          renderedPx += sliceH;
-          first = false;
-        }
-      }
-
-      const numero = sanitize(els.numero.value);
-      const nom = sanitize(els.nom.value);
-      pdf.save(`Recu_${nom}_${numero}.pdf`);
+      const pdf = await buildPdf();
+      pdf.save(pdfFilename());
       hint.textContent = 'PDF téléchargé avec succès.';
     } catch (err) {
       console.error(err);
@@ -605,6 +623,61 @@
     } catch (err) {
       console.error(err);
       hint.textContent = "Échec de l'envoi. Vérifie l'URL et ta connexion internet.";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
+  document.getElementById('waBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('waBtn');
+    const hint = document.getElementById('waHint');
+    const phoneRaw = document.getElementById('waPhone').value.trim();
+    const digits = phoneRaw.replace(/[^\d]/g, '');
+
+    if (!digits) {
+      hint.textContent = "Indique le numéro WhatsApp du destinataire (avec l'indicatif pays, ex : +223 70 00 00 00).";
+      return;
+    }
+    if (digits.length < 8) {
+      hint.textContent = "Numéro trop court. N'oublie pas l'indicatif pays (223 pour le Mali).";
+      return;
+    }
+    if (!els.nom.value) {
+      hint.textContent = "Renseigne au moins le nom du participant avant d'envoyer.";
+      return;
+    }
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Préparation…';
+
+    const message = `Bonjour, voici le reçu de paiement — Camp STEM & Robotique 2026${els.nom.value ? ' pour ' + els.nom.value : ''}${els.numero.value ? ' (N° ' + els.numero.value + ')' : ''}.`;
+
+    try {
+      const pdf = await buildPdf();
+      const filename = pdfFilename();
+      const blob = pdf.output('blob');
+      const file = new File([blob], filename, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Mobile: opens the native share sheet with the PDF already attached — choose WhatsApp there
+        await navigator.share({ files: [file], title: 'Reçu de paiement', text: message });
+        hint.textContent = 'Choisis WhatsApp dans la fenêtre de partage qui vient de s\'ouvrir.';
+      } else {
+        // Desktop fallback: download the PDF, then open WhatsApp with the message pre-filled
+        pdf.save(filename);
+        const waMessage = message + " (le fichier PDF vient d'être téléchargé sur ton ordinateur — joins-le ici avant d'envoyer).";
+        window.open(`https://wa.me/${digits}?text=${encodeURIComponent(waMessage)}`, '_blank');
+        hint.textContent = "PDF téléchargé et WhatsApp ouvert : joins le fichier téléchargé dans la conversation.";
+      }
+    } catch (err) {
+      console.error(err);
+      if (err && err.name === 'AbortError') {
+        hint.textContent = 'Envoi annulé.';
+      } else {
+        hint.textContent = "Échec de l'envoi. Vérifie ta connexion internet.";
+      }
     } finally {
       btn.disabled = false;
       btn.textContent = original;
