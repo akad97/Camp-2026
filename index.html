@@ -80,6 +80,12 @@
     font-weight:600;
     margin-bottom:5px;
   }
+  .field label .req{color:#b5121b;}
+  .field input.invalid,
+  .radios.invalid{
+    outline:2px solid #b5121b;
+    outline-offset:0;
+  }
   .field input[type=text],
   .field input[type=number],
   .field input[type=date]{
@@ -94,7 +100,7 @@
   .field input:focus{outline:2px solid var(--black); outline-offset:0;}
   .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
 
-  .radios{display:flex; flex-wrap:wrap; gap:8px 16px;}
+  .radios{display:flex; flex-wrap:wrap; gap:8px 16px; padding:2px;}
   .radios label{
     display:flex; align-items:center; gap:6px;
     font-size:13px; font-weight:400; margin:0;
@@ -266,18 +272,18 @@
 
     <div class="row2">
       <div class="field">
-        <label for="numero">N° Reçu</label>
-        <input type="text" id="numero" placeholder="ex : 0042">
+        <label for="numero">N° Reçu <span class="req">*</span></label>
+        <input type="text" id="numero" placeholder="ex : 0042" required>
       </div>
       <div class="field">
-        <label for="date">Date</label>
-        <input type="date" id="date">
+        <label for="date">Date <span class="req">*</span></label>
+        <input type="date" id="date" required>
       </div>
     </div>
 
     <div class="field">
-      <label for="nom">Nom complet du participant</label>
-      <input type="text" id="nom" placeholder="ex : Aïssata Traoré">
+      <label for="nom">Nom complet du participant <span class="req">*</span></label>
+      <input type="text" id="nom" placeholder="ex : Aïssata Traoré" required>
     </div>
 
     <div class="field">
@@ -286,8 +292,8 @@
     </div>
 
     <div class="field">
-      <label for="receveur">Reçu par (nom de la personne qui reçoit l'argent)</label>
-      <input type="text" id="receveur" placeholder="ex : Ibrahim Sow">
+      <label for="receveur">Reçu par (nom de la personne qui reçoit l'argent) <span class="req">*</span></label>
+      <input type="text" id="receveur" placeholder="ex : Ibrahim Sow" required>
     </div>
 
     <div class="row2">
@@ -307,8 +313,8 @@
     </div>
 
     <div class="field">
-      <label for="paye">Montant payé (FCFA)</label>
-      <input type="number" id="paye" placeholder="ex : 50000" min="0">
+      <label for="paye">Montant payé (FCFA) <span class="req">*</span></label>
+      <input type="number" id="paye" placeholder="ex : 50000" min="0" required>
     </div>
 
     <div class="field">
@@ -318,9 +324,9 @@
     </div>
 
     <div class="field">
-      <label>Moyen de paiement</label>
+      <label>Moyen de paiement <span class="req">*</span></label>
       <div class="radios">
-        <label><input type="radio" name="moyen" value="Espèce"> Espèce</label>
+        <label><input type="radio" name="moyen" value="Espèce" required> Espèce</label>
         <label><input type="radio" name="moyen" value="Orange Money"> Orange Money</label>
         <label><input type="radio" name="moyen" value="Wave"> Wave</label>
         <label><input type="radio" name="moyen" value="Virement"> Virement</label>
@@ -347,11 +353,11 @@
     <div class="panel-section">
       <h2>Envoi par WhatsApp</h2>
       <div class="field">
-        <label for="waPhone">Numéro WhatsApp du destinataire (avec indicatif pays)</label>
+        <label for="waPhone">Numéro WhatsApp du destinataire (avec indicatif pays) <span class="req">*</span></label>
         <input type="text" id="waPhone" placeholder="ex : +223 70 00 00 00">
       </div>
       <button class="btn dark" id="waBtn">Envoyer par WhatsApp</button>
-      <div class="hint" id="waHint">Sur mobile : le PDF est joint directement dans WhatsApp. Sur ordinateur : le PDF se télécharge et WhatsApp Web s'ouvre — il suffit de joindre le fichier téléchargé.</div>
+      <div class="hint" id="waHint">Le PDF est envoyé directement dans la discussion WhatsApp du numéro saisi. Sur mobile : le fichier est joint automatiquement. Sur ordinateur : le fichier se télécharge et il suffit de le glisser dans la discussion déjà ouverte.</div>
     </div>
   </div>
 
@@ -380,6 +386,31 @@
     totalDisplay: document.getElementById('totalDisplay'),
     resteDisplay: document.getElementById('resteDisplay'),
   };
+
+  function validateForm(extraHintEl){
+    const requiredInputs = [els.numero, els.date, els.nom, els.receveur, els.paye];
+    let firstInvalid = null;
+    let ok = true;
+
+    requiredInputs.forEach(el => {
+      const bad = !el.value || (el.type === 'number' && el.value.trim() === '');
+      el.classList.toggle('invalid', bad);
+      if (bad) { ok = false; if (!firstInvalid) firstInvalid = el; }
+    });
+
+    const radiosWrap = document.querySelector('.radios');
+    const moyenOk = !!getMoyen();
+    radiosWrap.classList.toggle('invalid', !moyenOk);
+    if (!moyenOk) { ok = false; if (!firstInvalid) firstInvalid = radiosWrap; }
+
+    if (!ok) {
+      if (extraHintEl) {
+        extraHintEl.textContent = 'Remplis tous les champs obligatoires (marqués d\'un *) avant de continuer.';
+      }
+      if (firstInvalid && firstInvalid.focus) firstInvalid.focus();
+    }
+    return ok;
+  }
 
   function fmt(n){
     if (isNaN(n)) return '—';
@@ -549,6 +580,7 @@
   document.getElementById('downloadBtn').addEventListener('click', async () => {
     const btn = document.getElementById('downloadBtn');
     const hint = document.getElementById('downloadHint');
+    if (!validateForm(hint)) return;
     const original = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'Génération du PDF…';
@@ -584,10 +616,7 @@
       hint.textContent = "Colle d'abord l'URL de ton script Google Apps Script ci-dessus.";
       return;
     }
-    if (!els.nom.value) {
-      hint.textContent = "Renseigne au moins le nom du participant avant d'enregistrer.";
-      return;
-    }
+    if (!validateForm(hint)) return;
 
     const total = (parseFloat(els.inscription.value)||0) + (parseFloat(els.participation.value)||0);
     const paye = parseFloat(els.paye.value);
@@ -632,20 +661,29 @@
   document.getElementById('waBtn').addEventListener('click', async () => {
     const btn = document.getElementById('waBtn');
     const hint = document.getElementById('waHint');
-    const phoneRaw = document.getElementById('waPhone').value.trim();
+    const waPhoneEl = document.getElementById('waPhone');
+    const phoneRaw = waPhoneEl.value.trim();
     const digits = phoneRaw.replace(/[^\d]/g, '');
 
+    waPhoneEl.classList.toggle('invalid', digits.length < 8);
     if (!digits) {
       hint.textContent = "Indique le numéro WhatsApp du destinataire (avec l'indicatif pays, ex : +223 70 00 00 00).";
+      waPhoneEl.focus();
       return;
     }
     if (digits.length < 8) {
       hint.textContent = "Numéro trop court. N'oublie pas l'indicatif pays (223 pour le Mali).";
+      waPhoneEl.focus();
       return;
     }
-    if (!els.nom.value) {
-      hint.textContent = "Renseigne au moins le nom du participant avant d'envoyer.";
-      return;
+    if (!validateForm(hint)) return;
+
+    // Open the window synchronously (within the click gesture) so the browser
+    // does not block it as a popup once we start doing async work below.
+    const isMobileShareLikely = !!(navigator.canShare);
+    let waWindow = null;
+    if (!isMobileShareLikely) {
+      waWindow = window.open('', '_blank');
     }
 
     const original = btn.textContent;
@@ -657,31 +695,57 @@
     try {
       const pdf = await buildPdf();
       const filename = pdfFilename();
-      const blob = pdf.output('blob');
-      const file = new File([blob], filename, { type: 'application/pdf' });
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Mobile: opens the native share sheet with the PDF already attached — choose WhatsApp there
-        await navigator.share({ files: [file], title: 'Reçu de paiement', text: message });
-        hint.textContent = 'Choisis WhatsApp dans la fenêtre de partage qui vient de s\'ouvrir.';
-      } else {
-        // Desktop fallback: download the PDF, then open WhatsApp with the message pre-filled
+      let sharedViaMobile = false;
+      if (navigator.canShare) {
+        try {
+          const blob = pdf.output('blob');
+          const file = new File([blob], filename, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: 'Reçu de paiement', text: message });
+            hint.textContent = 'Choisis WhatsApp dans la fenêtre de partage qui vient de s\'ouvrir.';
+            sharedViaMobile = true;
+          }
+        } catch (shareErr) {
+          if (shareErr && shareErr.name === 'AbortError') {
+            hint.textContent = 'Envoi annulé.';
+            sharedViaMobile = true; // user cancelled, don't fall back
+          }
+          // otherwise fall through to desktop path below
+        }
+      }
+
+      if (!sharedViaMobile) {
+        // Desktop path: download the PDF, then send straight to the entered
+        // number's WhatsApp chat (already-opened window avoids popup blocking).
         pdf.save(filename);
         const waMessage = message + " (le fichier PDF vient d'être téléchargé sur ton ordinateur — joins-le ici avant d'envoyer).";
-        window.open(`https://wa.me/${digits}?text=${encodeURIComponent(waMessage)}`, '_blank');
-        hint.textContent = "PDF téléchargé et WhatsApp ouvert : joins le fichier téléchargé dans la conversation.";
+        const waUrl = `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(waMessage)}`;
+        if (waWindow) {
+          waWindow.location.href = waUrl;
+        } else {
+          window.open(waUrl, '_blank');
+        }
+        hint.textContent = `PDF téléchargé et WhatsApp ouvert vers le +${digits} : joins le fichier téléchargé dans la conversation.`;
       }
     } catch (err) {
       console.error(err);
-      if (err && err.name === 'AbortError') {
-        hint.textContent = 'Envoi annulé.';
-      } else {
-        hint.textContent = "Échec de l'envoi. Vérifie ta connexion internet.";
-      }
+      if (waWindow) { try { waWindow.close(); } catch (e) {} }
+      hint.textContent = "Échec de l'envoi. Vérifie ta connexion internet.";
     } finally {
       btn.disabled = false;
       btn.textContent = original;
     }
+  });
+
+  document.querySelectorAll('.field input[type=text], .field input[type=number], .field input[type=date]').forEach(el => {
+    el.addEventListener('input', () => el.classList.remove('invalid'));
+  });
+  document.querySelectorAll('input[name="moyen"]').forEach(el => {
+    el.addEventListener('change', () => {
+      const radiosWrap = document.querySelector('.radios');
+      if (radiosWrap) radiosWrap.classList.remove('invalid');
+    });
   });
 
   // default date = today
